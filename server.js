@@ -300,7 +300,8 @@ apiRouter.post("/chat-request", (req, res) => {
             }]
           },
           generationConfig: {
-            "temperature": 0.85
+            "temperature": 1,
+            "maxOutputTokens": 65535
           }
         });
       } else if (type === "deepseek-chat" || type === "deepseek-reasoner") {
