@@ -1,4 +1,4 @@
-<!-- filename: index.html -->
+<!-- filename: public/index.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -12,7 +12,7 @@
     <!-- 历史记录抽屉容器 -->
     <div id="history-drawer" class="sidebar-drawer">
         <div class="sidebar">
-            <button id="new-chat-btn">+ 新建对话</button>
+            <button id="new-chat-btn">新建对话</button>
             <ul id="session-list"></ul>
             <div id="user-info">
                 <span id="username-display"></span>
@@ -23,20 +23,31 @@
     <div id="drawer-overlay" class="drawer-overlay"></div>
     
     <!-- 主应用容器，默认隐藏 -->
-    <div id="app-container" class="main-container hidden">
-        <div class="chat-container">
-            <div class="header">
-                <button id="history-toggle-btn" title="历史记录">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M12 8v4l2 2"></path></svg>
-                </button>
-                <select id="model-select"></select>
+    <div id="app-container" class="hidden">
+        <header>
+            <button id="history-toggle-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <h2 id="chat-title"></h2>
+            <button id="new-chat-btn-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+        </header>
+        <main id="chat-box">
+            <!-- Messages will be rendered here by JS -->
+        </main>
+        <footer>
+            <div>
+                <form id="chat-form">
+                    <div>
+                        <textarea id="user-input" placeholder="在这里输入你的问题... (Ctrl+Enter 发送)" rows="1"></textarea>
+                        <button type="submit" id="send-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
+                </form>
             </div>
-            <div id="chat-box" class="chat-box"></div>
-            <form id="chat-form" class="chat-form">
-                <textarea id="user-input" placeholder="在这里输入你的问题... (Ctrl+Enter 发送)" rows="1"></textarea>
-                <button type="submit">发送</button>
-            </form>
-        </div>
+        </footer>
     </div>
 
     <!-- 登录/注册模态框 -->
