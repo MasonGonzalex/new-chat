@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!dateString) return '';
       try {
           // Replace hyphens with slashes for better Safari compatibility
-          const compatibleDateString = dateString.replace(/-/g, "/");
+          const compatibleDateString = String(dateString).replace(/-/g, "/");
           const date = new Date(compatibleDateString);
           return date.toLocaleString("zh-CN", {
               month: "2-digit",
@@ -321,7 +321,8 @@ document.addEventListener("DOMContentLoaded", () => {
     messageDiv.className = "message assistant";
     messageDiv.dataset.messageIndex = index;
     const innerDiv = document.createElement('div');
-    const thoughtBlock = (data.thought && data.thought.trim() !== '') ? `
+
+    const thoughtBlockHTML = `
       <div class="thinking-header">
           <span class="timer">思考过程 (${data.duration}s)</span>
           <span class="toggle-thought">
@@ -329,20 +330,27 @@ document.addEventListener("DOMContentLoaded", () => {
           </span>
       </div>
       <div class="thought-wrapper">
-          <div class="thought-process">${marked.parse(data.thought)}</div>
+          <div class="thought-process">${marked.parse(data.thought || '(无思考过程)')}</div>
       </div>
-    ` : '';
-    innerDiv.innerHTML = `${thoughtBlock}<div class="final-answer">${marked.parse(data.answer)}</div>`;
+    `;
+    
+    innerDiv.innerHTML = `${thoughtBlockHTML}<div class="final-answer">${marked.parse(data.answer)}</div>`;
     messageDiv.appendChild(innerDiv);
     chatBox.appendChild(messageDiv);
-    if (data.thought && data.thought.trim() !== '') {
-      const header = innerDiv.querySelector(".thinking-header");
-      const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
-      header.addEventListener("click", () => {
-        thoughtWrapper.classList.toggle("collapsed");
-        header.querySelector(".arrow").classList.toggle("down");
-      });
+
+    const header = innerDiv.querySelector(".thinking-header");
+    const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
+
+    if (!data.thought || !data.thought.trim()) {
+        header.style.display = 'none';
+        thoughtWrapper.style.display = 'none';
+    } else {
+        header.addEventListener("click", () => {
+            header.classList.toggle('collapsed');
+            thoughtWrapper.classList.toggle('collapsed');
+        });
     }
+
     innerDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
     chatBox.scrollTop = chatBox.scrollHeight;
     return messageDiv;
@@ -389,7 +397,10 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMessages();
     userInput.value = "";
     userInput.style.height = 'auto';
-    userInput.focus();
+    // No focus on mobile to prevent keyboard popping up again
+    if (window.innerWidth > 768) {
+      userInput.focus();
+    }
     await apiRequest(`/api/sessions/${state.activeSessionId}/messages`, {
       method: "POST",
       body: JSON.stringify(userMessage),
@@ -422,8 +433,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const header = assistantMessageDiv.querySelector(".thinking-header");
     header.addEventListener("click", () => {
-        innerDiv.querySelector(".thought-wrapper").classList.toggle("collapsed");
-        header.querySelector(".arrow").classList.toggle("down");
+        header.classList.toggle('collapsed');
+        innerDiv.querySelector(".thought-wrapper").classList.toggle('collapsed');
     });
 
     let currentThought = "";
