@@ -12,6 +12,25 @@ document.addEventListener("DOMContentLoaded", () => {
     apiProviders: [],
   };
 
+  function formatDate(dateString) {
+      if (!dateString) return '';
+      try {
+          // Replace hyphens with slashes for better Safari compatibility
+          const compatibleDateString = dateString.replace(/-/g, "/");
+          const date = new Date(compatibleDateString);
+          return date.toLocaleString("zh-CN", {
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+          });
+      } catch (e) {
+          console.error("Invalid date format:", dateString);
+          return '';
+      }
+  }
+
   // --- DOM 元素选择器 (DOM Element Selectors) ---
   const appContainer = document.getElementById("app-container");
   const authContainer = document.getElementById("auth-container");
@@ -207,7 +226,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const newSession = await apiRequest("/api/sessions", {
         method: "POST"
       });
-      state.sessions.unshift(newSession);
+      const sessionWithDate = { ...newSession, created_at: new Date().toISOString() };
+      state.sessions.unshift(sessionWithDate);
       renderSessions();
       await loadSessionMessages(newSession.id);
       historyDrawer.classList.remove("open");
@@ -250,17 +270,7 @@ document.addEventListener("DOMContentLoaded", () => {
       titleSpan.textContent = session.title;
       const timeSpan = document.createElement("span");
       timeSpan.classList.add("session-time");
-      const date = new Date(session.created_at);
-      timeSpan.textContent = date
-        .toLocaleString("zh-CN", {
-          timeZone: "Asia/Shanghai",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        })
-        .replace(/\//g, "-");
+      timeSpan.textContent = formatDate(session.created_at);
       listItem.appendChild(titleSpan);
       listItem.appendChild(timeSpan);
       listItem.dataset.sessionId = session.id;
@@ -391,6 +401,9 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleStreamingChat(apiId, userMessage, sessionId) {
     const assistantMessageDiv = document.createElement("div");
     assistantMessageDiv.className = "message assistant";
+    const messageIndex = state.currentMessages.filter(msg => msg.role !== 'system').length;
+    assistantMessageDiv.dataset.messageIndex = messageIndex;
+
     const innerDiv = document.createElement("div");
     innerDiv.innerHTML = `
         <div class="thinking-header">
