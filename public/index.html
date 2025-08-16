@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智核 AI (Cloud-Based AI Chat)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+    <!-- 历史记录抽屉容器 -->
+    <div id="history-drawer" class="sidebar-drawer">
+        <div class="sidebar">
+            <button id="new-chat-btn">+ 新建对话</button>
+            <ul id="session-list"></ul>
+            <div id="user-info">
+                <span id="username-display"></span>
+                <button id="logout-btn">退出登录</button>
+            </div>
+        </div>
+    </div>
+    <div id="drawer-overlay" class="drawer-overlay"></div>
+    
+    <!-- 主应用容器，默认隐藏 -->
+    <div id="app-container" class="main-container hidden">
+        <div class="chat-container">
+            <div class="header">
+                <button id="history-toggle-btn" title="历史记录">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M12 8v4l2 2"></path></svg>
+                </button>
+                <select id="model-select"></select>
+            </div>
+            <div id="chat-box" class="chat-box"></div>
+            <form id="chat-form" class="chat-form">
+                <input type="text" id="user-input" placeholder="在这里输入你的问题..." autocomplete="off">
+                <button type="submit">发送</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 登录/注册模态框 -->
+    <div id="auth-container" class="auth-overlay">
+        <div class="auth-box">
+            <h2 id="auth-title">登录</h2>
+            <form id="auth-form">
+                <input type="text" id="auth-username" placeholder="用户名" required>
+                <input type="password" id="auth-password" placeholder="密码 (至少6位)" required>
+                <button type="submit" id="auth-submit-btn">登录</button>
+            </form>
+            <p id="auth-message"></p>
+            <a href="#" id="switch-auth-mode">没有账号？点击注册</a>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web-streams-polyfill@3.2.1/dist/polyfill.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
