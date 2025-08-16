@@ -1,3 +1,4 @@
+// filename: server.js
 // server.js (Final Stable Version - Polling Logic Corrected)
 const express = require("express");
 const fetch = (...args) => import("node-fetch").then(({
@@ -170,7 +171,11 @@ apiRouter.get("/sessions/:id/messages", (req, res) => {
         role: "system",
         content: "你是一个名为“智核”的AI助手。你的核心准则是：提供诚实、有帮助、且无害的回答。你必须始终使用简体中文进行交流，即使是技术术语也要尝试翻译或用中文解释。在任何情况下都不能使用英文或其他语言。",
       };
-      const formattedMessages = [systemMessage, ...messages];
+      // Important: Here we do NOT parse the content, we send it as is.
+      const formattedMessages = [systemMessage, ...messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }))];
       res.json(formattedMessages);
     });
   });
@@ -229,6 +234,10 @@ apiRouter.put("/sessions/:id/title", (req, res) => {
 // --- Chat Polling Routes ---
 apiRouter.post("/chat-request", (req, res) => {
   const taskId = uuidv4();
+  const {
+    sessionId
+  } = req.body; // Receive sessionId
+
   taskStorage[taskId] = {
     fullThought: "",
     fullAnswer: "",
@@ -240,11 +249,28 @@ apiRouter.post("/chat-request", (req, res) => {
   });
 
   (async () => {
+    const startTime = Date.now(); // Record start time
     try {
       const {
         messages,
         apiId
       } = req.body;
+      
+      // Context purification logic
+      const purifiedMessages = messages.map(message => {
+        if (message.role === 'assistant') {
+          try {
+            const parsedContent = JSON.parse(message.content);
+            if (parsedContent && typeof parsedContent === 'object' && parsedContent.answer) {
+              return { ...message, content: parsedContent.answer };
+            }
+          } catch (e) {
+            // Not a valid JSON or not the structure we expect, keep original content
+          }
+        }
+        return message;
+      });
+
       const provider = apiPool[apiId];
       if (!provider) throw new Error("无效的 API ID");
       const {
@@ -258,7 +284,7 @@ apiRouter.post("/chat-request", (req, res) => {
         requestUrl = `${apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${apiKey}&alt=sse`;
         requestBody = JSON.stringify({
           model: "gemini-2.5-pro",
-          contents: messages.filter(msg => msg.role !== "system").map(msg => ({
+          contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
             role: msg.role === "assistant" ? "model" : msg.role,
             parts: [{
               text: msg.content
@@ -269,7 +295,7 @@ apiRouter.post("/chat-request", (req, res) => {
         requestUrl = apiUrl;
         requestBody = JSON.stringify({
           model: type,
-          messages: messages,
+          messages: purifiedMessages,
           stream: true
         });
       } else {
@@ -321,6 +347,27 @@ apiRouter.post("/chat-request", (req, res) => {
     } finally {
       if (taskStorage[taskId]) {
         taskStorage[taskId].done = true;
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        // [CORE LOGIC] Persist the standardized assistant message
+        if (sessionId) {
+          const finalMessageData = {
+            thought: taskStorage[taskId].fullThought,
+            answer: taskStorage[taskId].fullAnswer,
+            duration: duration
+          };
+          const finalContentString = JSON.stringify(finalMessageData);
+
+          db.run("INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
+            [sessionId, 'assistant', finalContentString],
+            function(err) {
+              if (err) {
+                console.error(`[DB Error] Failed to save assistant message for session ${sessionId}:`, err.message);
+              }
+            }
+          );
+        }
+
         setTimeout(() => {
           delete taskStorage[taskId];
         }, 300000);

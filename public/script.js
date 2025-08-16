@@ -418,93 +418,118 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   async function handleStreamingChat(apiId, userMessage, sessionId) {
-    // We create a temporary message container for streaming
     const assistantMessageDiv = document.createElement("div");
     assistantMessageDiv.className = "message assistant";
+    assistantMessageDiv.innerHTML = `
+        <div class="thinking-header">
+            <span class="timer">思考过程 (0.0s)</span>
+            <span class="toggle-thought">
+                <svg class="arrow down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+        </div>
+        <div class="thought-wrapper">
+            <div class="thought-process">正在思考中.</div>
+        </div>
+        <div class="final-answer"></div>`;
     chatBox.appendChild(assistantMessageDiv);
+
+    const timerSpan = assistantMessageDiv.querySelector('.timer');
+    const thoughtProcessDiv = assistantMessageDiv.querySelector('.thought-process');
+    const finalAnswerDiv = assistantMessageDiv.querySelector('.final-answer');
 
     let currentThought = "";
     let currentAnswer = "";
+    let animationIntervalId = null;
     const startTime = Date.now();
+    let dotCount = 1;
+
+    animationIntervalId = setInterval(() => {
+        if (timerSpan) {
+            timerSpan.textContent = `思考过程 (${((Date.now() - startTime) / 1000).toFixed(1)}s)`;
+        }
+        if (thoughtProcessDiv && !currentThought) {
+            dotCount = (dotCount % 3) + 1;
+            thoughtProcessDiv.textContent = '正在思考中' + '.'.repeat(dotCount);
+        }
+    }, 400);
 
     try {
-      const requestResponse = await apiRequest("/api/chat-request", {
-        method: "POST",
-        body: JSON.stringify({
-          messages: state.currentMessages,
-          apiId: apiId,
-          sessionId: sessionId // Pass sessionId to the backend
-        }),
-      });
-      if (!requestResponse.taskId) throw new Error("未能获取有效的任务ID");
-      const {
-        taskId
-      } = requestResponse;
+        const requestResponse = await apiRequest("/api/chat-request", {
+            method: "POST",
+            body: JSON.stringify({
+                messages: state.currentMessages,
+                apiId: apiId,
+                sessionId: sessionId
+            }),
+        });
+        if (!requestResponse.taskId) throw new Error("未能获取有效的任务ID");
+        const { taskId } = requestResponse;
 
-      await new Promise((resolve, reject) => {
-        const intervalId = setInterval(async () => {
-          try {
-            const pollResponse = await apiRequest(`/api/chat-poll/${taskId}`);
-            if (pollResponse.error) {
-              clearInterval(intervalId);
-              return reject(new Error(pollResponse.error));
-            }
+        await new Promise((resolve, reject) => {
+            const intervalId = setInterval(async () => {
+                try {
+                    const pollResponse = await apiRequest(`/api/chat-poll/${taskId}`);
+                    if (pollResponse.error) {
+                        clearInterval(intervalId);
+                        reject(new Error(pollResponse.error));
+                        return;
+                    }
 
-            if (pollResponse.fullThought !== currentThought || pollResponse.fullAnswer !== currentAnswer) {
-              currentThought = pollResponse.fullThought;
-              currentAnswer = pollResponse.fullAnswer;
+                    if (pollResponse.fullThought !== currentThought || pollResponse.fullAnswer !== currentAnswer) {
+                        currentThought = pollResponse.fullThought;
+                        currentAnswer = pollResponse.fullAnswer;
+                        const cursor = pollResponse.done ? "" : "▋";
+                        if (thoughtProcessDiv) {
+                            thoughtProcessDiv.innerHTML = marked.parse(currentThought || '正在思考中...');
+                        }
+                        if (finalAnswerDiv) {
+                            finalAnswerDiv.innerHTML = marked.parse(currentAnswer + cursor);
+                        }
+                    }
 
-              // Render intermediate state with loading cursor/animation
-              const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-              const cursor = pollResponse.done ? "" : "▋";
-
-              const messageData = {
-                thought: currentThought,
-                answer: currentAnswer + cursor,
-                duration: duration
-              };
-
-              // Re-render the current streaming message
-              renderThinkingMessage(messageData, false);
-            }
-
-            if (pollResponse.done) {
-              clearInterval(intervalId);
-              resolve();
-            }
-          } catch (error) {
-            clearInterval(intervalId);
-            reject(error);
-          }
-        }, 300);
-      });
+                    if (pollResponse.done) {
+                        clearInterval(intervalId);
+                        resolve();
+                    }
+                } catch (error) {
+                    clearInterval(intervalId);
+                    reject(error);
+                }
+            }, 300);
+        });
     } catch (error) {
-      assistantMessageDiv.innerHTML = `<div class="final-answer"><span style="color: red;">请求处理错误: ${error.message}</span></div>`;
-      return;
+        clearInterval(animationIntervalId);
+        assistantMessageDiv.innerHTML = `<div class="final-answer"><span style="color: red;">请求处理错误: ${error.message}</span></div>`;
+        return;
     } finally {
-      // Remove the temporary message container
-      assistantMessageDiv.remove();
+        clearInterval(animationIntervalId);
+        
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        
+        // Final update to the temporary div before removal to ensure clean state
+        if (timerSpan) timerSpan.textContent = `思考过程 (${duration}s)`;
+        if (finalAnswerDiv) finalAnswerDiv.innerHTML = marked.parse(currentAnswer);
 
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      const messageData = {
-        thought: currentThought,
-        answer: currentAnswer,
-        duration: duration
-      };
+        assistantMessageDiv.remove();
 
-      const finalMessage = {
-        role: "assistant",
-        content: JSON.stringify(messageData)
-      };
+        const messageData = {
+            thought: currentThought,
+            answer: currentAnswer,
+            duration: duration
+        };
 
-      // Add final message to state and re-render all messages
-      state.currentMessages.push(finalMessage);
-      renderMessages();
+        const finalMessage = {
+            role: "assistant",
+            content: JSON.stringify(messageData)
+        };
 
-      // Backend handles database saving, frontend updates session title if needed
-      await updateSessionTitle(userMessage);
+        state.currentMessages.push(finalMessage);
+        renderMessages();
+
+        await updateSessionTitle(userMessage);
     }
-  }
+}
+
 
   async function updateSessionTitle(userMessage) {
     const userMessagesCount = state.currentMessages.filter((msg) => msg.role === "user").length;
