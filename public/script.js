@@ -341,15 +341,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const header = innerDiv.querySelector(".thinking-header");
     const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
 
-    if (!data.thought || !data.thought.trim()) {
-        header.style.display = 'none';
-        thoughtWrapper.style.display = 'none';
-    } else {
-        header.addEventListener("click", () => {
-            header.classList.toggle('collapsed');
-            thoughtWrapper.classList.toggle('collapsed');
-        });
-    }
+    header.addEventListener("click", () => {
+        header.classList.toggle('collapsed');
+        thoughtWrapper.classList.toggle('collapsed');
+    });
 
     innerDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -506,6 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
         assistantMessageDiv.querySelector('.timer').textContent = `思考过程 (${duration}s)`;
         assistantMessageDiv.querySelector('.final-answer').innerHTML = marked.parse(currentAnswer);
 
+        // Finalize thought process HTML
         if (!currentThought.trim()) {
             assistantMessageDiv.querySelector('.thought-process').innerHTML = '(无思考过程)';
         }
