@@ -380,6 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   chatForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    userInput.blur();
     const message = userInput.value.trim();
     if (!message || !state.activeSessionId) return;
     sendButton.disabled = true;
@@ -587,6 +588,13 @@ document.addEventListener("DOMContentLoaded", () => {
       await loadSessions();
       sendButton.disabled = true;
     }
+    
+    userInput.addEventListener('focus', () => {
+      // A small delay is needed for the keyboard to start animating
+      setTimeout(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      }, 150);
+    });
   }
 
   initializeApp();

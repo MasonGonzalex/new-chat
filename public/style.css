@@ -42,7 +42,7 @@ body {
     background-color: var(--bg-main);
     color: var(--text-primary);
     margin: 0;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -59,8 +59,8 @@ button {
 #app-container {
     display: grid;
     grid-template-rows: auto 1fr auto;
-    height: 100vh;
-    max-height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
     width: 100%;
     background-color: var(--bg-chat-area);
 }
