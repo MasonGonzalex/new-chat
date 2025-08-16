@@ -467,6 +467,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         await new Promise((resolve, reject) => {
             const intervalId = setInterval(async () => {
+                if (state.activeSessionId !== sessionId) {
+                    clearInterval(intervalId);
+                    resolve();
+                    return;
+                }
                 try {
                     const pollResponse = await apiRequest(`/api/chat-poll/${taskId}`);
                     if (pollResponse.error) {
@@ -495,7 +500,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     clearInterval(intervalId);
                     reject(error);
                 }
-            }, 300);
+            }, 100);
         });
     } catch (error) {
         clearInterval(animationIntervalId);
