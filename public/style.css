@@ -57,14 +57,17 @@ button {
 
 /* --- 2. 主布局 --- */
 #app-container {
-    display: flex;
-    flex-direction: column;
-    height: 100dvh;
+    position: relative;
+    height: 100vh;
     max-height: 100dvh;
 }
 
 header {
-    flex-shrink: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -76,15 +79,20 @@ header {
 }
 
 main#chat-box {
-    flex-grow: 1;
+    position: absolute;
+    top: 60px; /* Header height */
+    bottom: 85px; /* An initial estimated footer height */
+    left: 0;
+    right: 0;
     overflow-y: auto;
-    /* This is a crucial fix for flexbox scrolling on mobile */
-    min-height: 0; 
     padding: 24px 16px;
 }
 
 footer {
-    flex-shrink: 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
     padding: 12px 16px;
     background-color: var(--bg-chat-area);
     border-top: 1px solid var(--border-color);
@@ -237,11 +245,6 @@ pre code {
     border-bottom: 1px dashed var(--border-color);
     margin-bottom: 12px;
 }
-.message.assistant.no-thought .thinking-header,
-.message.assistant.no-thought .thought-wrapper {
-    display: none;
-}
-
 
 /* 输入表单 */
 #chat-form > div { position: relative; }

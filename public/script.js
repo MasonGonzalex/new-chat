@@ -12,15 +12,22 @@ document.addEventListener("DOMContentLoaded", () => {
     apiProviders: [],
   };
 
-  function setChatboxHeight() {
+  function adjustLayout() {
+    const app = document.getElementById('app-container');
     const header = document.querySelector('#app-container > header');
     const footer = document.querySelector('#app-container > footer');
-    if (header && footer) {
-        const headerHeight = header.offsetHeight;
-        const footerHeight = footer.offsetHeight;
-        const chatBox = document.getElementById('chat-box');
-        chatBox.style.height = `calc(100dvh - ${headerHeight}px - ${footerHeight}px)`;
-    }
+    const chatBox = document.getElementById('chat-box');
+
+    if (!app || !header || !footer || !chatBox) return;
+
+    const vh = window.innerHeight;
+    app.style.height = `${vh}px`;
+
+    const headerHeight = header.offsetHeight;
+    const footerHeight = footer.offsetHeight;
+
+    chatBox.style.top = `${headerHeight}px`;
+    chatBox.style.bottom = `${footerHeight}px`;
   }
 
   function formatDate(dateString) {
@@ -331,12 +338,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
     messageDiv.dataset.messageIndex = index;
-    if (!data.thought || !data.thought.trim()) { 
-        messageDiv.classList.add('no-thought'); 
-    }
+    
     const innerDiv = document.createElement('div');
 
-    const thoughtBlockHTML = `
+    const thoughtBlockHTML = (data.thought && data.thought.trim()) 
+      ? `
       <div class="thinking-header">
           <span class="timer">思考过程 (${data.duration}s)</span>
           <span class="toggle-thought">
@@ -346,19 +352,21 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="thought-wrapper">
           <div class="thought-process">${marked.parse(data.thought || '(无思考过程)')}</div>
       </div>
-    `;
+    `
+      : '';
     
     innerDiv.innerHTML = `${thoughtBlockHTML}<div class="final-answer">${marked.parse(data.answer)}</div>`;
     messageDiv.appendChild(innerDiv);
     chatBox.appendChild(messageDiv);
 
-    const header = innerDiv.querySelector(".thinking-header");
-    const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
-
-    header.addEventListener("click", () => {
-        header.classList.toggle('collapsed');
-        thoughtWrapper.classList.toggle('collapsed');
-    });
+    if (data.thought && data.thought.trim()) {
+        const header = innerDiv.querySelector(".thinking-header");
+        const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
+        header.addEventListener("click", () => {
+            header.classList.toggle('collapsed');
+            thoughtWrapper.classList.toggle('collapsed');
+        });
+    }
 
     innerDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -376,6 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
     userInput.style.height = 'auto';
     userInput.style.height = `${userInput.scrollHeight}px`;
     sendButton.disabled = !userInput.value.trim();
+    adjustLayout();
   });
 
   async function loadApiProviders() {
@@ -406,6 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
     renderMessages();
     userInput.value = "";
     userInput.style.height = 'auto';
+    adjustLayout(); // Reset footer height
     // No focus on mobile to prevent keyboard popping up again
     if (window.innerWidth > 768) {
       userInput.focus();
@@ -609,8 +619,8 @@ document.addEventListener("DOMContentLoaded", () => {
       sendButton.disabled = true;
     }
     
-    setChatboxHeight();
-    window.addEventListener('resize', setChatboxHeight);
+    adjustLayout();
+    window.addEventListener('resize', adjustLayout);
 
     userInput.addEventListener('focus', () => {
       // A small delay is needed for the keyboard to start animating
