@@ -134,10 +134,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // --- 侧边栏与会话管理 (Sidebar & Session Management) ---
   historyToggleBtn.addEventListener("click", () => {
+    tocDrawer.classList.remove("open");
     historyDrawer.classList.toggle("open");
     drawerOverlay.classList.toggle("visible");
   });
   tocBtn.addEventListener("click", () => {
+    historyDrawer.classList.remove("open");
     tocDrawer.classList.toggle("open");
     drawerOverlay.classList.toggle("visible");
   });
@@ -392,7 +394,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const innerDiv = document.createElement("div");
     innerDiv.innerHTML = `
         <div class="thinking-header">
-            <span class="timer">思考中...</span>
+            <span class="timer">思考过程 (0.0s)</span>
             <span class="toggle-thought">
                 <svg class="arrow down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </span>
@@ -413,8 +415,13 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentThought = "";
     let currentAnswer = "";
     const startTime = Date.now();
+    let timerIntervalId = null;
 
     try {
+      timerIntervalId = setInterval(() => {
+        assistantMessageDiv.querySelector('.timer').textContent = `思考过程 (${((Date.now() - startTime) / 1000).toFixed(1)}s)`;
+      }, 100);
+
       const requestResponse = await apiRequest("/api/chat-request", {
         method: "POST",
         body: JSON.stringify({ messages: state.currentMessages, apiId, sessionId }),
@@ -441,8 +448,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentThought = pollResponse.fullThought;
                 currentAnswer = pollResponse.fullAnswer;
                 const cursor = pollResponse.done ? "" : "▋";
-                assistantMessageDiv.querySelector('.timer').textContent = `思考过程 (${((Date.now() - startTime) / 1000).toFixed(1)}s)`;
-                assistantMessageDiv.querySelector('.thought-process').innerHTML = marked.parse(currentThought || '<div class="dot-flashing"></div>');
+
+                const thoughtProcessDiv = assistantMessageDiv.querySelector('.thought-process');
+                if (currentThought) {
+                    thoughtProcessDiv.innerHTML = marked.parse(currentThought);
+                } else {
+                    thoughtProcessDiv.innerHTML = '<div class="dot-flashing"></div>';
+                }
+
                 assistantMessageDiv.querySelector('.final-answer').innerHTML = marked.parse(currentAnswer + cursor);
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
@@ -458,16 +471,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
       });
     } catch (error) {
+      if(timerIntervalId) clearInterval(timerIntervalId);
       innerDiv.innerHTML = `<div class="final-answer" style="color: var(--error-color);">请求处理错误: ${error.message}</div>`;
       return;
     } finally {
+        if(timerIntervalId) clearInterval(timerIntervalId);
+        
         const duration = ((Date.now() - startTime) / 1000).toFixed(1);
         assistantMessageDiv.querySelector('.timer').textContent = `思考过程 (${duration}s)`;
         assistantMessageDiv.querySelector('.final-answer').innerHTML = marked.parse(currentAnswer);
 
         if (!currentThought.trim()) {
-            assistantMessageDiv.querySelector('.thinking-header').style.display = 'none';
-            assistantMessageDiv.querySelector('.thought-wrapper').style.display = 'none';
+            assistantMessageDiv.querySelector('.thought-process').innerHTML = '(无思考过程)';
         }
 
         const messageData = { thought: currentThought, answer: currentAnswer, duration };
