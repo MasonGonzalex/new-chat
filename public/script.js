@@ -26,15 +26,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const newChatBtnHeader = document.getElementById("new-chat-btn-header");
   const sessionList = document.getElementById("session-list");
   const chatForm = document.getElementById("chat-form");
-  const userInput = document.getElementById("user-input"); // Now a textarea
+  const userInput = document.getElementById("user-input");
   const chatBox = document.getElementById("chat-box");
   const chatTitle = document.getElementById("chat-title");
+  const modelSelect = document.getElementById("model-select");
   const usernameDisplay = document.getElementById("username-display");
   const logoutBtn = document.getElementById("logout-btn");
   const historyToggleBtn = document.getElementById("history-toggle-btn");
   const historyDrawer = document.getElementById("history-drawer");
   const drawerOverlay = document.getElementById("drawer-overlay");
   const sendButton = document.getElementById("send-button");
+  const tocBtn = document.getElementById("toc-btn");
+  const tocDrawer = document.getElementById("toc-drawer");
 
   // --- 依赖库配置 (Library Configuration) ---
   marked.setOptions({
@@ -134,8 +137,13 @@ document.addEventListener("DOMContentLoaded", () => {
     historyDrawer.classList.toggle("open");
     drawerOverlay.classList.toggle("visible");
   });
+  tocBtn.addEventListener("click", () => {
+    tocDrawer.classList.toggle("open");
+    drawerOverlay.classList.toggle("visible");
+  });
   drawerOverlay.addEventListener("click", () => {
     historyDrawer.classList.remove("open");
+    tocDrawer.classList.remove("open");
     drawerOverlay.classList.remove("visible");
   });
 
@@ -222,6 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
       state.currentMessages = await apiRequest(`/api/sessions/${sessionId}/messages`);
       renderMessages();
       userInput.focus();
+      renderTableOfContents();
     } catch (error) {
       console.error(`加载对话 [${sessionId}] 失败:`, error);
       chatBox.innerHTML = `<div class="message assistant"><div>加载消息失败: ${error.message}</div></div>`;
@@ -261,31 +270,28 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // --- 消息渲染 (Message Rendering) ---
-
   function renderMessages() {
     chatBox.innerHTML = "";
-    if (state.currentMessages) {
-      state.currentMessages
-        .filter((msg) => msg.role !== "system")
-        .forEach((msg) => {
-          try {
-            const parsedContent = JSON.parse(msg.content);
-            if (parsedContent && typeof parsedContent === 'object' && 'answer' in parsedContent) {
-              renderThinkingMessage(parsedContent);
-            } else {
-              renderSimpleMessage(msg.content, msg.role);
-            }
-          } catch (e) {
-            renderSimpleMessage(msg.content, msg.role);
-          }
-        });
-    }
+    const filteredMessages = state.currentMessages.filter(msg => msg.role !== 'system');
+    filteredMessages.forEach((msg, index) => {
+      try {
+        const parsedContent = JSON.parse(msg.content);
+        if (parsedContent && typeof parsedContent === 'object' && 'answer' in parsedContent) {
+          renderThinkingMessage(parsedContent, index);
+        } else {
+          renderSimpleMessage(msg.content, msg.role, index);
+        }
+      } catch (e) {
+        renderSimpleMessage(msg.content, msg.role, index);
+      }
+    });
     chatBox.scrollTop = chatBox.scrollHeight;
   }
 
-  function renderSimpleMessage(content, role) {
+  function renderSimpleMessage(content, role, index) {
     const messageDiv = document.createElement("div");
     messageDiv.classList.add("message", role);
+    messageDiv.dataset.messageIndex = index;
     const innerDiv = document.createElement("div");
     innerDiv.innerHTML = marked.parse(String(content));
     messageDiv.appendChild(innerDiv);
@@ -297,12 +303,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return messageDiv;
   }
 
-  function renderThinkingMessage(data) {
+  function renderThinkingMessage(data, index) {
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
-
+    messageDiv.dataset.messageIndex = index;
     const innerDiv = document.createElement('div');
-
     const thoughtBlock = (data.thought && data.thought.trim() !== '') ? `
       <div class="thinking-header">
           <span class="timer">思考过程 (${data.duration}s)</span>
@@ -314,15 +319,9 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="thought-process">${marked.parse(data.thought)}</div>
       </div>
     ` : '';
-
-    innerDiv.innerHTML = `
-      ${thoughtBlock}
-      <div class="final-answer">${marked.parse(data.answer)}</div>
-    `;
-
+    innerDiv.innerHTML = `${thoughtBlock}<div class="final-answer">${marked.parse(data.answer)}</div>`;
     messageDiv.appendChild(innerDiv);
     chatBox.appendChild(messageDiv);
-
     if (data.thought && data.thought.trim() !== '') {
       const header = innerDiv.querySelector(".thinking-header");
       const thoughtWrapper = innerDiv.querySelector(".thought-wrapper");
@@ -331,10 +330,7 @@ document.addEventListener("DOMContentLoaded", () => {
         header.querySelector(".arrow").classList.toggle("down");
       });
     }
-
-    innerDiv.querySelectorAll('pre code').forEach((block) => {
-      hljs.highlightElement(block);
-    });
+    innerDiv.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
     chatBox.scrollTop = chatBox.scrollHeight;
     return messageDiv;
   }
@@ -346,18 +342,33 @@ document.addEventListener("DOMContentLoaded", () => {
       chatForm.dispatchEvent(new Event("submit"));
     }
   });
-
   userInput.addEventListener("input", () => {
     userInput.style.height = 'auto';
-    userInput.style.height = (userInput.scrollHeight) + 'px';
+    userInput.style.height = `${userInput.scrollHeight}px`;
     sendButton.disabled = !userInput.value.trim();
   });
+
+  async function loadApiProviders() {
+    try {
+      const providers = await apiRequest("/api/providers");
+      state.apiProviders = providers;
+      modelSelect.innerHTML = "";
+      providers.forEach((provider) => {
+        const option = document.createElement("option");
+        option.value = provider.id;
+        option.textContent = provider.name;
+        modelSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error("加载 API 列表失败:", error);
+      modelSelect.innerHTML = "<option>加载失败</option>";
+    }
+  }
 
   chatForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const message = userInput.value.trim();
     if (!message || !state.activeSessionId) return;
-
     sendButton.disabled = true;
     const userMessage = { role: "user", content: message };
     state.currentMessages.push(userMessage);
@@ -365,18 +376,17 @@ document.addEventListener("DOMContentLoaded", () => {
     userInput.value = "";
     userInput.style.height = 'auto';
     userInput.focus();
-
     await apiRequest(`/api/sessions/${state.activeSessionId}/messages`, {
       method: "POST",
       body: JSON.stringify(userMessage),
     });
-
-    await handleStreamingChat(message, state.activeSessionId);
+    const apiId = modelSelect.value;
+    await handleStreamingChat(apiId, message, state.activeSessionId);
     sendButton.disabled = false;
   });
 
-  async function handleStreamingChat(userMessage, sessionId) {
-    const loadingBubble = document.createElement("div");
+  async function handleStreamingChat(apiId, userMessage, sessionId) {
+    let loadingBubble = document.createElement("div");
     loadingBubble.className = "message assistant loading";
     loadingBubble.innerHTML = `<div><div class="dot-flashing"></div></div>`;
     chatBox.appendChild(loadingBubble);
@@ -392,8 +402,8 @@ document.addEventListener("DOMContentLoaded", () => {
         method: "POST",
         body: JSON.stringify({
           messages: state.currentMessages,
-          apiId: "api_1",
-          sessionId: sessionId
+          apiId,
+          sessionId
         }),
       });
       if (!requestResponse.taskId) throw new Error("未能获取有效的任务ID");
@@ -415,26 +425,27 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if ((pollResponse.fullAnswer || pollResponse.fullThought) && !assistantMessageDiv) {
-              loadingBubble.remove();
-              assistantMessageDiv = document.createElement("div");
-              assistantMessageDiv.className = "message assistant";
-              assistantMessageDiv.innerHTML = `
-                <div>
-                  <div class="thinking-header">
-                    <span class="timer">思考过程...</span>
-                    <span class="toggle-thought">
-                      <svg class="arrow down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </span>
-                  </div>
-                  <div class="thought-wrapper"><div class="thought-process"></div></div>
-                  <div class="final-answer"></div>
-                </div>`;
-              chatBox.appendChild(assistantMessageDiv);
-              const header = assistantMessageDiv.querySelector(".thinking-header");
-              header.addEventListener("click", () => {
-                header.parentElement.querySelector(".thought-wrapper").classList.toggle("collapsed");
-                header.querySelector(".arrow").classList.toggle("down");
-              });
+                loadingBubble.remove();
+                loadingBubble = null;
+                assistantMessageDiv = document.createElement("div");
+                assistantMessageDiv.className = "message assistant";
+                assistantMessageDiv.innerHTML = `
+                    <div>
+                        <div class="thinking-header">
+                            <span class="timer">思考中...</span>
+                            <span class="toggle-thought">
+                                <svg class="arrow down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </span>
+                        </div>
+                        <div class="thought-wrapper"><div class="thought-process"></div></div>
+                        <div class="final-answer"></div>
+                    </div>`;
+                chatBox.appendChild(assistantMessageDiv);
+                const header = assistantMessageDiv.querySelector(".thinking-header");
+                header.addEventListener("click", () => {
+                    header.parentElement.querySelector(".thought-wrapper").classList.toggle("collapsed");
+                    header.querySelector(".arrow").classList.toggle("down");
+                });
             }
 
             if (assistantMessageDiv && (pollResponse.fullThought !== currentThought || pollResponse.fullAnswer !== currentAnswer)) {
@@ -458,22 +469,71 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 100);
       });
     } catch (error) {
-      if(loadingBubble) loadingBubble.remove();
-      renderSimpleMessage(`请求处理错误: ${error.message}`, 'assistant');
+      if (loadingBubble) loadingBubble.remove();
+      renderSimpleMessage(`请求处理错误: ${error.message}`, 'assistant', state.currentMessages.filter(m => m.role !== 'system').length);
       return;
     } finally {
-      if(loadingBubble) loadingBubble.remove();
-      if(assistantMessageDiv) assistantMessageDiv.remove();
+      if (loadingBubble) loadingBubble.remove();
+      if (assistantMessageDiv) assistantMessageDiv.remove();
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      const messageData = { thought: currentThought, answer: currentAnswer, duration: duration };
+      const messageData = { thought: currentThought, answer: currentAnswer, duration };
       const finalMessage = { role: "assistant", content: JSON.stringify(messageData) };
       state.currentMessages.push(finalMessage);
       renderMessages();
 
       await updateSessionTitle(userMessage);
+      renderTableOfContents();
     }
   }
+
+  function renderTableOfContents() {
+    tocDrawer.innerHTML = '<div class="sidebar"><h2 style="padding: 12px 16px; margin:0;">目录</h2><ul id="toc-list" style="list-style:none; padding:0; margin:0;"></ul></div>';
+    const tocList = tocDrawer.querySelector("#toc-list");
+    const filteredMessages = state.currentMessages.filter(msg => msg.role !== 'system');
+    
+    filteredMessages.forEach((msg, index) => {
+      if (msg.role === 'user') {
+        const listItem = document.createElement('li');
+        listItem.style.padding = "10px 16px";
+        listItem.style.borderBottom = "1px solid var(--border-color)";
+        listItem.style.cursor = "pointer";
+
+        const userText = document.createElement('div');
+        userText.textContent = `Q: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`;
+        userText.style.fontWeight = "500";
+        userText.style.marginBottom = "4px";
+
+        const assistantMsg = filteredMessages[index + 1];
+        let assistantText = document.createElement('div');
+        assistantText.style.fontSize = "13px";
+        assistantText.style.color = "var(--text-secondary)";
+        if(assistantMsg && assistantMsg.role === 'assistant') {
+            try {
+                const parsed = JSON.parse(assistantMsg.content);
+                assistantText.textContent = `A: ${(parsed.answer || "").substring(0, 60)}...`;
+            } catch (e) {
+                assistantText.textContent = `A: ${assistantMsg.content.substring(0, 60)}...`;
+            }
+        } else {
+            assistantText.textContent = "A: 等待回答...";
+        }
+
+        listItem.appendChild(userText);
+        listItem.appendChild(assistantText);
+        listItem.addEventListener('click', () => {
+            const targetMessage = document.querySelector(`[data-message-index="${index}"]`);
+            if(targetMessage) {
+                targetMessage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                tocDrawer.classList.remove('open');
+                drawerOverlay.classList.remove('visible');
+            }
+        });
+        tocList.appendChild(listItem);
+      }
+    });
+  }
+
 
   async function updateSessionTitle(userMessage) {
     const userMessagesCount = state.currentMessages.filter((msg) => msg.role === "user").length;
@@ -503,6 +563,7 @@ document.addEventListener("DOMContentLoaded", () => {
     toggleAuthViews(!!state.token);
 
     if (state.token) {
+      await loadApiProviders();
       await loadSessions();
       sendButton.disabled = true;
     }

@@ -73,6 +73,7 @@ header {
     border-bottom: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     z-index: 10;
+    gap: 8px;
 }
 
 main#chat-box {
@@ -103,6 +104,7 @@ header button {
     color: var(--text-secondary);
     border-radius: var(--radius-md);
     transition: background-color 0.2s, color 0.2s;
+    flex-shrink: 0;
 }
 header button:hover {
     background-color: var(--bg-assistant-bubble);
@@ -116,7 +118,17 @@ header button:hover {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding: 0 16px;
+    padding: 0 8px;
+    flex-grow: 1;
+}
+#model-select {
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-size: 14px;
+    height: 40px;
 }
 
 /* 聊天气泡 */
@@ -136,7 +148,7 @@ header button:hover {
 }
 
 .message > div {
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-radius: var(--radius-lg);
     position: relative;
 }
@@ -150,6 +162,7 @@ header button:hover {
     color: var(--text-assistant-bubble);
     border-bottom-left-radius: 4px;
     width: 100%;
+    overflow: hidden; /* Important for child radius */
 }
 
 /* 代码块 */
@@ -171,34 +184,34 @@ pre code {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 16px;
+    padding: 8px 14px;
     background-color: #e5e7eb80;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 13px;
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
-    border-top-left-radius: var(--radius-lg);
-    border-top-right-radius: var(--radius-lg);
+    margin: -10px -14px 10px -14px; /* Pull to edges */
 }
 .toggle-thought .arrow { transition: transform .2s ease-in-out; }
-.toggle-thought .arrow.down { transform: rotate(0deg); }
-.thought-wrapper.collapsed + .toggle-thought .arrow { transform: rotate(-90deg); }
+.thought-wrapper.collapsed ~ .thinking-header .toggle-thought .arrow,
+.thought-wrapper.collapsed + .thinking-header .toggle-thought .arrow {
+    transform: rotate(-90deg);
+}
 .thought-wrapper {
     display: flex; flex-direction: column;
     max-height: 1000px;
     overflow: hidden;
-    transition: max-height .3s ease-in-out, padding .3s ease-in-out;
+    transition: max-height .3s ease-in-out;
 }
 .thought-wrapper.collapsed { max-height: 0; }
 .thought-process {
-    font-size: 15px;
+    font-size: 14px;
     color: var(--text-secondary);
-    padding: 16px;
+    padding-bottom: 10px;
     border-bottom: 1px dashed var(--border-color);
+    margin-bottom: 10px;
 }
-.final-answer {
-    padding: 12px 16px;
-}
+.final-answer {}
 
 /* 输入表单 */
 #chat-form > div { position: relative; }
@@ -250,9 +263,9 @@ pre code {
     height: 20px;
 }
 
-/* --- 4. 侧边栏与认证 (与之前类似，适配新变量) --- */
+/* --- 4. 侧边栏与认证 --- */
 .sidebar-drawer {
-    position: fixed; top: 0; left: 0; height: 100%; width: 280px;
+    position: fixed; top: 0; height: 100%; width: 280px;
     z-index: 200; background-color: var(--bg-sidebar);
     transform: translateX(-100%);
     transition: transform .3s ease-in-out;
@@ -260,6 +273,15 @@ pre code {
     border-right: 1px solid var(--border-color);
 }
 .sidebar-drawer.open { transform: translateX(0); }
+.sidebar-drawer.right {
+    left: auto;
+    right: 0;
+    transform: translateX(100%);
+    border-right: none;
+    border-left: 1px solid var(--border-color);
+}
+.sidebar-drawer.right.open { transform: translateX(0); }
+
 .sidebar { padding: 12px; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
 .drawer-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
