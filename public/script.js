@@ -501,7 +501,6 @@ document.addEventListener("DOMContentLoaded", () => {
         assistantMessageDiv.querySelector('.timer').textContent = `思考过程 (${duration}s)`;
         assistantMessageDiv.querySelector('.final-answer').innerHTML = marked.parse(currentAnswer);
 
-        // Finalize thought process HTML
         if (!currentThought.trim()) {
             assistantMessageDiv.querySelector('.thought-process').innerHTML = '(无思考过程)';
         }
