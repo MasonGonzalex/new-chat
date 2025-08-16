@@ -304,8 +304,6 @@ apiRouter.post("/chat-request", (req, res) => {
           }
         });
         
-        console.log("Sending to Gemini API, Body:", requestBody);
-
       } else if (type === "deepseek-chat" || type === "deepseek-reasoner") {
         requestUrl = apiUrl;
         requestBody = JSON.stringify({

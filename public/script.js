@@ -12,6 +12,17 @@ document.addEventListener("DOMContentLoaded", () => {
     apiProviders: [],
   };
 
+  function setChatboxHeight() {
+    const header = document.querySelector('#app-container > header');
+    const footer = document.querySelector('#app-container > footer');
+    if (header && footer) {
+        const headerHeight = header.offsetHeight;
+        const footerHeight = footer.offsetHeight;
+        const chatBox = document.getElementById('chat-box');
+        chatBox.style.height = `calc(100dvh - ${headerHeight}px - ${footerHeight}px)`;
+    }
+  }
+
   function formatDate(dateString) {
       if (!dateString) return '';
       try {
@@ -320,6 +331,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const messageDiv = document.createElement("div");
     messageDiv.className = "message assistant";
     messageDiv.dataset.messageIndex = index;
+    if (!data.thought || !data.thought.trim()) { 
+        messageDiv.classList.add('no-thought'); 
+    }
     const innerDiv = document.createElement('div');
 
     const thoughtBlockHTML = `
@@ -595,6 +609,9 @@ document.addEventListener("DOMContentLoaded", () => {
       sendButton.disabled = true;
     }
     
+    setChatboxHeight();
+    window.addEventListener('resize', setChatboxHeight);
+
     userInput.addEventListener('focus', () => {
       // A small delay is needed for the keyboard to start animating
       setTimeout(() => {

@@ -237,6 +237,11 @@ pre code {
     border-bottom: 1px dashed var(--border-color);
     margin-bottom: 12px;
 }
+.message.assistant.no-thought .thinking-header,
+.message.assistant.no-thought .thought-wrapper {
+    display: none;
+}
+
 
 /* 输入表单 */
 #chat-form > div { position: relative; }
