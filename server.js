@@ -261,10 +261,8 @@ apiRouter.post("/chat-request", (req, res) => {
         if (message.role === 'assistant') {
           try {
             const parsedContent = JSON.parse(message.content);
-            if (parsedContent && typeof parsedContent === 'object' && parsedContent.answer) {
-              return { ...message,
-                content: parsedContent.answer
-              };
+            if (parsedContent && typeof parsedContent === 'object' && parsedContent.hasOwnProperty('answer')) {
+              return { ...message, content: parsedContent.answer };
             }
           } catch (e) {
             // Not a valid JSON or not the structure we expect, keep original content
@@ -304,8 +302,6 @@ apiRouter.post("/chat-request", (req, res) => {
           }
         });
         
-        console.log("Sending to Gemini API, Body:", requestBody);
-
       } else if (type === "deepseek-chat" || type === "deepseek-reasoner") {
         requestUrl = apiUrl;
         requestBody = JSON.stringify({
