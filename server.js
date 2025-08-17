@@ -31,15 +31,35 @@ const apiPool = {};
 let i = 1;
 while (process.env[`API_${i}_NAME`]) {
   const apiId = `api_${i}`;
-  apiPool[apiId] = {
+  const apiType = process.env[`API_${i}_TYPE`];
+
+  let providerConfig = {
     id: apiId,
     name: process.env[`API_${i}_NAME`],
-    type: process.env[`API_${i}_TYPE`],
-    apiKey: process.env[`API_${i}_KEY`],
+    type: apiType,
     apiUrl: process.env[`API_${i}_URL`],
   };
+
+  if (apiType === "gemini") {
+    const apiKeys = [];
+    if (process.env[`API_${i}_KEY`]) {
+      apiKeys.push(process.env[`API_${i}_KEY`]);
+    }
+    let j = 1;
+    while (process.env[`API_${i}_KEY_${j}`]) {
+      apiKeys.push(process.env[`API_${i}_KEY_${j}`]);
+      j++;
+    }
+    providerConfig.apiKey = apiKeys;
+    providerConfig.currentKeyIndex = 0;
+  } else {
+    providerConfig.apiKey = process.env[`API_${i}_KEY`];
+  }
+
+  apiPool[apiId] = providerConfig;
   i++;
 }
+
 
 // --- API Router and Middleware ---
 const apiRouter = express.Router();
@@ -275,54 +295,77 @@ apiRouter.post("/chat-request", (req, res) => {
       if (!provider) throw new Error("无效的 API ID");
       const {
         type,
-        apiUrl,
-        apiKey
+        apiUrl
       } = provider;
-      let requestUrl, requestBody;
+      
+      let response;
 
       if (type === "gemini") {
-        requestUrl = `${apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${apiKey}&alt=sse`;
-        const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
+        const totalKeys = provider.apiKey.length;
+        if (totalKeys === 0) throw new Error("No Gemini API keys configured.");
 
-        requestBody = JSON.stringify({
-          contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
-            role: msg.role === "assistant" ? "model" : msg.role,
-            parts: [{
-              text: msg.content
-            }]
-          })),
-          system_instruction: {
-            parts: [{
-              text: systemPrompt
-            }]
-          },
-          generationConfig: {
-            "temperature": 1,
-            "maxOutputTokens": 65535
-          }
-        });
-        
+        let success = false;
+        for (let attempt = 0; attempt < totalKeys; attempt++) {
+            const keyIndex = provider.currentKeyIndex;
+            const currentApiKey = provider.apiKey[keyIndex];
+            
+            const requestUrl = `${apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
+            const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
+            
+            const requestBody = JSON.stringify({
+              contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
+                role: msg.role === "assistant" ? "model" : msg.role,
+                parts: [{ text: msg.content }]
+              })),
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              generationConfig: { "temperature": 1, "maxOutputTokens": 65535 }
+            });
+
+            console.log("Sending to Gemini API, Body:", requestBody);
+            response = await fetch(requestUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: requestBody,
+                agent: agent,
+            });
+
+            if (response.ok) {
+                success = true;
+                break; 
+            }
+
+            if (response.status === 429) {
+                console.warn(`Gemini API key at index ${keyIndex} is rate-limited. Trying next key.`);
+                provider.currentKeyIndex = (keyIndex + 1) % totalKeys;
+            } else {
+                const errorText = await response.text();
+                throw new Error(`API returned a non-retriable error: ${response.status} ${errorText}`);
+            }
+        }
+
+        if (!success) {
+            throw new Error("All Gemini API keys are rate-limited or failed.");
+        }
       } else if (type === "deepseek-chat" || type === "deepseek-reasoner") {
-        requestUrl = apiUrl;
-        requestBody = JSON.stringify({
+        const requestUrl = apiUrl;
+        const requestBody = JSON.stringify({
           model: type,
           messages: purifiedMessages,
           stream: true
         });
+        response = await fetch(requestUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${provider.apiKey}`
+            },
+            body: requestBody,
+            agent: agent,
+        });
       } else {
         throw new Error("该模型类型不支持流式输出");
       }
-
-      const response = await fetch(requestUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: type.startsWith("deepseek") ? `Bearer ${apiKey}` : undefined
-        },
-        body: requestBody,
-        agent: agent,
-      });
-
+      
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`API 返回错误: ${errorText}`);
