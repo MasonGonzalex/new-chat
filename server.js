@@ -1,4 +1,3 @@
-
 // filename: server.js
 // server.js (Final Stable Version - Polling Logic Corrected)
 const express = require("express");
@@ -294,7 +293,7 @@ apiRouter.post("/chat-request", (req, res) => {
                         parts: [{ text: msg.content }]
                     })),
                     system_instruction: { parts: [{ text: systemPrompt }] },
-                    generationConfig: { "temperature": 1, "maxOutputTokens": 8192 }
+                    generationConfig: { "temperature": 1, "maxOutputTokens": 65535 }
                 });
 
                 const tempResponse = await fetch(requestUrl, {
@@ -309,7 +308,6 @@ apiRouter.post("/chat-request", (req, res) => {
                 }
                 
                 if (tempResponse.status === 429 || tempResponse.status === 400) {
-                    console.warn(`Gemini API key at index ${keyIndex} failed with status ${tempResponse.status}. Trying next key.`);
                     lastError = await tempResponse.text();
                     provider.currentKeyIndex = (keyIndex + 1) % totalKeys;
                 } else {
@@ -317,14 +315,13 @@ apiRouter.post("/chat-request", (req, res) => {
                     throw new Error(`API returned a non-retriable error: ${tempResponse.status} ${lastError}`);
                 }
             } catch (e) {
-                console.error(`Attempt ${attempt + 1} with key index ${keyIndex} failed:`, e.message);
                 lastError = e.message;
                 provider.currentKeyIndex = (provider.currentKeyIndex + 1) % totalKeys;
             }
         }
 
         // If the loop finishes without a successful return, throw the final error.
-        throw new Error(`All Gemini API keys failed. Last error: ${JSON.stringify(lastError)}`);
+        throw new Error("模型服务暂时不可用，请稍后再试 (所有API密钥均失败)。");
     }
 
     try {
