@@ -1,5 +1,5 @@
 // filename: server.js
-// server.js (Final Stable Version - Polling Logic Corrected)
+// server.js (Final Stable Version - Polling Logic Corrected - NO SYSTEM PROMPT)
 const express = require("express");
 const fetch = (...args) => import("node-fetch").then(({
   default: fetch
@@ -285,20 +285,18 @@ apiRouter.post("/chat-request", (req, res) => {
             try {
                 const requestUrl = `${provider.apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
                 
-                // --- START OF MODIFICATION ---
-                const systemPrompt = "You are an elite-tier 'Explainer' and 'Problem-Solver' AI. Your core talent is making complex topics feel intuitive and actionable, regardless of the domain (from math and logic to life advice and technical support). You don't just provide answers; you provide understanding.\n\nApply your core talent to the following user query. You must follow this structure for complex queries:\n\n1. Frame the Problem: Start by acknowledging the user's query and briefly reframe it to highlight the core principle or the real challenge behind it.\n\n2. Establish the 'First Principle': Before providing a solution, explain the single most important concept, rule, or mindset needed to understand it. This is the 'Aha!' moment.\n\n3. Provide a Step-by-Step Breakdown: Offer a clear, numbered list of steps. For each step, include both the 'Action (What to do)' and the 'Rationale (Why we do it)'. Use analogies where possible.\n\n4. Synthesize & Generalize: After the solution, connect the specific steps back to the 'First Principle' and explain how this method can be applied to other similar problems.\n\n5. Proactive Wrap-up: Conclude with a concise summary and anticipate a potential next question, a common pitfall, or an advanced tip.\n\nAdaptive Simplicity Clause: For straightforward factual questions, bypass this structure and provide a direct, accurate answer.";
-                
+                // --- MODIFICATION: SYSTEM PROMPT REMOVED ---
                 const requestBody = JSON.stringify({
                     contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
                         role: msg.role === "assistant" ? "model" : msg.role,
                         parts: [{ text: msg.content }]
                     })),
-                    system_instruction: { parts: [{ text: systemPrompt }] },
+                    // system_instruction field is now completely omitted.
                     generationConfig: { 
-                        "temperature": 0.7, 
+                        "temperature": 0.9, 
                         "topP": 0.95, 
                         "topK": 64, 
-                        "maxOutputTokens": 8192 
+                        "maxOutputTokens": 30000 
                     }
                 });
                 // --- END OF MODIFICATION ---
