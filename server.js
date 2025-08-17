@@ -293,7 +293,7 @@ apiRouter.post("/chat-request", (req, res) => {
                     })),
                     // system_instruction field is now completely omitted.
                     generationConfig: { 
-                        "temperature": 0.9, 
+                        "temperature": 0.85, 
                         "topP": 0.95, 
                         "topK": 64, 
                         "maxOutputTokens": 65536 
