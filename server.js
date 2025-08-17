@@ -296,7 +296,7 @@ apiRouter.post("/chat-request", (req, res) => {
                         "temperature": 0.9, 
                         "topP": 0.95, 
                         "topK": 64, 
-                        "maxOutputTokens": 30000 
+                        "maxOutputTokens": 65536 
                     }
                 });
                 // --- END OF MODIFICATION ---
