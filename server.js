@@ -299,81 +299,79 @@ apiRouter.post("/chat-request", (req, res) => {
       } = provider;
       
       let response;
+      let success = false;
 
       if (type === "gemini") {
-        const totalKeys = provider.apiKey.length;
-        if (totalKeys === 0) throw new Error("No Gemini API keys configured.");
+          const totalKeys = provider.apiKey.length;
+          if (totalKeys === 0) throw new Error("No Gemini API keys configured.");
 
-        let success = false;
-        for (let attempt = 0; attempt < totalKeys; attempt++) {
-            const keyIndex = provider.currentKeyIndex;
-            const currentApiKey = provider.apiKey[keyIndex];
-            
-            const requestUrl = `${apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
-            const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
-            
-            const requestBody = JSON.stringify({
-              contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
-                role: msg.role === "assistant" ? "model" : msg.role,
-                parts: [{ text: msg.content }]
-              })),
-              system_instruction: { parts: [{ text: systemPrompt }] },
-              generationConfig: { "temperature": 1, "maxOutputTokens": 65535 }
-            });
+          for (let attempt = 0; attempt < totalKeys; attempt++) {
+              const keyIndex = provider.currentKeyIndex;
+              const currentApiKey = provider.apiKey[keyIndex];
+              
+              const requestUrl = `${apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
+              const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
+              
+              const requestBody = JSON.stringify({
+                contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
+                  role: msg.role === "assistant" ? "model" : msg.role,
+                  parts: [{ text: msg.content }]
+                })),
+                system_instruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { "temperature": 1, "maxOutputTokens": 65535 }
+              });
 
-            console.log("Sending to Gemini API, Body:", requestBody);
-            response = await fetch(requestUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: requestBody,
-                agent: agent,
-            });
+              const tempResponse = await fetch(requestUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: requestBody,
+                  agent: agent,
+              });
 
-            if (response.ok) {
-                success = true;
-                break; // Request successful, exit the loop
-            }
+              if (tempResponse.ok) {
+                  response = tempResponse; // Save the successful response
+                  success = true;
+                  break; // Success, exit the loop
+              }
 
-            // If the request was not successful, check if it's a retriable error
-            if (response.status === 429 || response.status === 400) {
-                console.warn(`Gemini API key at index ${keyIndex} failed with status ${response.status}. Trying next key.`);
-                provider.currentKeyIndex = (keyIndex + 1) % totalKeys;
-                // Continue to the next iteration to try the next key
-            } else {
-                // For other non-retriable errors (like 500 server errors), throw an exception immediately
-                const errorText = await response.text();
-                throw new Error(`API returned a non-retriable error: ${response.status} ${errorText}`);
-            }
-        }
+              // If the request failed, check if it's a retriable error
+              if (tempResponse.status === 429 || tempResponse.status === 400) {
+                  console.warn(`Gemini API key at index ${keyIndex} failed with status ${tempResponse.status}. Trying next key.`);
+                  provider.currentKeyIndex = (keyIndex + 1) % totalKeys;
+                  // Continue to the next iteration
+              } else {
+                  // Unrecoverable error, throw immediately
+                  const errorText = await tempResponse.text();
+                  throw new Error(`API returned a non-retriable error: ${tempResponse.status} ${errorText}`);
+              }
+          }
 
-        if (!success) {
-            throw new Error("All Gemini API keys are rate-limited or failed.");
-        }
+          if (!success) {
+              throw new Error("All configured Gemini API keys failed (invalid or rate-limited).");
+          }
       } else if (type === "deepseek-chat" || type === "deepseek-reasoner") {
-        const requestUrl = apiUrl;
-        const requestBody = JSON.stringify({
-          model: type,
-          messages: purifiedMessages,
-          stream: true
-        });
-        response = await fetch(requestUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${provider.apiKey}`
-            },
-            body: requestBody,
-            agent: agent,
-        });
+          response = await fetch(apiUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${provider.apiKey}`
+              },
+              body: JSON.stringify({
+                model: type,
+                messages: purifiedMessages,
+                stream: true
+              }),
+              agent: agent,
+          });
       } else {
-        throw new Error("该模型类型不支持流式输出");
+          throw new Error("该模型类型不支持流式输出");
+      }
+
+      if (!response || !response.ok) {
+        const errorText = response ? await response.text() : "No response object received.";
+        throw new Error(`API request failed: ${errorText}`);
       }
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API 返回错误: ${errorText}`);
-      }
-
       for await (const chunk of response.body) {
         const lines = chunk.toString().split("\n");
         for (const line of lines) {
