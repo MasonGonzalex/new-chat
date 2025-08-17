@@ -331,13 +331,16 @@ apiRouter.post("/chat-request", (req, res) => {
 
             if (response.ok) {
                 success = true;
-                break; 
+                break; // Request successful, exit the loop
             }
 
-            if (response.status === 429) {
-                console.warn(`Gemini API key at index ${keyIndex} is rate-limited. Trying next key.`);
+            // If the request was not successful, check if it's a retriable error
+            if (response.status === 429 || response.status === 400) {
+                console.warn(`Gemini API key at index ${keyIndex} failed with status ${response.status}. Trying next key.`);
                 provider.currentKeyIndex = (keyIndex + 1) % totalKeys;
+                // Continue to the next iteration to try the next key
             } else {
+                // For other non-retriable errors (like 500 server errors), throw an exception immediately
                 const errorText = await response.text();
                 throw new Error(`API returned a non-retriable error: ${response.status} ${errorText}`);
             }
