@@ -43,14 +43,14 @@ while (process.env[`API_${i}_NAME`]) {
   if (apiType === "gemini") {
     const apiKeys = [];
     if (process.env[`API_${i}_KEY`]) {
-      apiKeys.push(process.env[`API_${i}_KEY`]);
+      apiKeys.push({ key: process.env[`API_${i}_KEY`], status: "active", cooldownUntil: 0 });
     }
     let j = 1;
     while (process.env[`API_${i}_KEY_${j}`]) {
-      apiKeys.push(process.env[`API_${i}_KEY_${j}`]);
+      apiKeys.push({ key: process.env[`API_${i}_KEY_${j}`], status: "active", cooldownUntil: 0 });
       j++;
     }
-    providerConfig.apiKey = apiKeys;
+    providerConfig.apiKeys = apiKeys;
     providerConfig.currentKeyIndex = 0;
   } else {
     providerConfig.apiKey = process.env[`API_${i}_KEY`];
@@ -272,55 +272,79 @@ apiRouter.post("/chat-request", (req, res) => {
     const startTime = Date.now(); // Record start time
     
     async function fetchWithGeminiFailover(provider, purifiedMessages) {
-        const totalKeys = provider.apiKey.length;
+        const totalKeys = provider.apiKeys.length;
         if (totalKeys === 0) {
             throw new Error("No Gemini API keys configured.");
         }
     
-        let lastKnownError = null;
-    
+        // 1. Find an available key
+        let selectedKeyIndex = -1;
         for (let i = 0; i < totalKeys; i++) {
-            const currentApiKey = provider.apiKey[i]; // Directly iterate in order, no more complex index calculation
+            const keyIndex = (provider.currentKeyIndex + i) % totalKeys;
+            const apiKeyInfo = provider.apiKeys[keyIndex];
             
-            try {
-                const requestUrl = `${provider.apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
-                const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
-                
-                const requestBody = JSON.stringify({
-                    contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
-                        role: msg.role === "assistant" ? "model" : msg.role,
-                        parts: [{ text: msg.content }]
-                    })),
-                    system_instruction: { parts: [{ text: systemPrompt }] },
-                    generationConfig: { "temperature": 1, "maxOutputTokens": 65535 }
-                });
-    
-                const response = await fetch(requestUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: requestBody,
-                    agent: agent,
-                });
-    
-                if (response.ok) {
-                    console.log(`Gemini API key at index ${i} succeeded.`);
-                    return response; // Found a working one, return immediately
-                }
-    
-                // If the response is not OK, record the error and let the loop continue
-                lastKnownError = await response.json(); // Record JSON error body
-                console.warn(`Gemini API key at index ${i} failed with status ${response.status}.`);
-    
-            } catch (networkError) {
-                // If it's a network-level fetch failure
-                lastKnownError = networkError.message;
-                console.warn(`Gemini API key at index ${i} failed with network error: ${networkError.message}`);
+            // Check if the key is in cooldown
+            if (apiKeyInfo.status === 'cooldown' && Date.now() < apiKeyInfo.cooldownUntil) {
+                continue; // Skip this key, it's cooling down
             }
+    
+            // If the cooldown has passed, restore it to active
+            if (apiKeyInfo.status === 'cooldown') {
+                apiKeyInfo.status = 'active';
+            }
+    
+            // Found an available key
+            selectedKeyIndex = keyIndex;
+            break;
         }
         
-        // If the loop completes fully, it means all keys have failed
-        console.error("All Gemini API keys failed. Last known error:", lastKnownError);
-        throw new Error(JSON.stringify(lastKnownError || { message: "All Gemini API keys failed." }));
+        // If no available keys were found
+        if (selectedKeyIndex === -1) {
+            throw new Error("GEMINI_ALL_KEYS_IN_COOLDOWN");
+        }
+        
+        // 2. Use the found key for the request
+        const apiKeyInfo = provider.apiKeys[selectedKeyIndex];
+        const currentApiKey = apiKeyInfo.key;
+        provider.currentKeyIndex = selectedKeyIndex; // Record the currently used key
+    
+        const requestUrl = `${provider.apiUrl.replace(":generateContent", ":streamGenerateContent")}?key=${currentApiKey}&alt=sse`;
+        const systemPrompt = "You are a wise, empathetic, and highly adaptive AI companion and guide. Your primary goal is to provide the most helpful and appropriate response based on the nature of the user's query.\nDefault Guiding Mode (For complex, personal, or explanatory questions):\nWhen the user seeks guidance, explanation, or advice, adopt the following structured approach:\nAcknowledge and Frame: Start with a brief, empathetic acknowledgment that frames the user's query in a positive or constructive light (e.g., \"That's a very practical question,\" \"That's an excellent topic to explore\").\nProvide Core Content with Clarity:\nFor Explanations: Use vivid analogies and metaphors. Structure the information with clear, human-centric headings. Whenever possible, add a section on \"Why this is important\" or practical applications. Proactively clarify common misconceptions.\nFor Guidance: Break down advice into actionable steps. Anticipate and address potential challenges or emotional barriers.\nFor Technical Topics: If appropriate, present multiple solutions or approaches (e.g., a basic version and an advanced version). Write clean, well-commented code.\nOffer Transcendent Insight: If the topic allows, conclude with a brief \"synthesis\" module that explores a higher-level perspective, a related philosophical point, or the \"other side\" of the issue (e.g., potential downsides, ethical considerations).\nSummarize with Purpose: End with a concise summary that reinforces the key takeaway or a final piece of empowering advice.\nAdaptive Simplicity Clause (Crucial Instruction):\nHowever, you must be discerning. If the user's query is a straightforward request for a fact, a list, a simple definition, or a direct code snippet, you must override the default guiding mode. In these cases, your response should be direct, concise, and accurate, without any unnecessary conversational framing or structural complexity. Prioritize efficiency and clarity above all.\nYour overarching tone should always be warm, encouraging, and clear, but the structure of your response must adapt to the user's implicit need—be a deep guide when needed, and a precise tool when requested.";
+        
+        const requestBody = JSON.stringify({
+            contents: purifiedMessages.filter(msg => msg.role !== "system").map(msg => ({
+                role: msg.role === "assistant" ? "model" : msg.role,
+                parts: [{ text: msg.content }]
+            })),
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { "temperature": 1, "maxOutputTokens": 8192 }
+        });
+    
+        const response = await fetch(requestUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: requestBody,
+            agent: agent,
+        });
+    
+        // 3. Update the key's status based on the response
+        if (response.ok) {
+            // Success, set the next starting point to the next key
+            provider.currentKeyIndex = (selectedKeyIndex + 1) % totalKeys;
+            return response;
+        }
+    
+        if (response.status === 429) { // Rate limit exceeded
+            console.warn(`Gemini API key at index ${selectedKeyIndex} is rate-limited. Placing it on cooldown for 1 minute.`);
+            apiKeyInfo.status = 'cooldown';
+            apiKeyInfo.cooldownUntil = Date.now() + 60 * 1000; // 1-minute cooldown
+        } else if (response.status === 400) { // Invalid key
+            console.error(`Gemini API key at index ${selectedKeyIndex} is INVALID. Marking as permanently disabled.`);
+            apiKeyInfo.status = 'disabled'; // Permanently disable
+        }
+        
+        // 4. Immediately try again by calling itself to find the next available key
+        return fetchWithGeminiFailover(provider, purifiedMessages);
     }
 
     try {
@@ -405,8 +429,14 @@ apiRouter.post("/chat-request", (req, res) => {
         }
       }
     } catch (error) {
-      console.error(`[后台任务 ${taskId} 失败]:`, error.message);
-      if (taskStorage[taskId]) taskStorage[taskId].error = error.message;
+        let errorMessage = error.message;
+        if (error.message === "GEMINI_ALL_KEYS_IN_COOLDOWN") {
+            errorMessage = "模型服务暂时过载，请稍后再试 (所有API密钥均在冷却中)。";
+        }
+        console.error(`[后台任务 ${taskId} 失败]:`, errorMessage);
+        if (taskStorage[taskId]) {
+            taskStorage[taskId].error = errorMessage;
+        }
     } finally {
       if (taskStorage[taskId]) {
         taskStorage[taskId].done = true;
